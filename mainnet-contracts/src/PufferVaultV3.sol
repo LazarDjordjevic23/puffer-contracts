@@ -127,4 +127,72 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3 {
         // msg.sender is the L1RewardManager contract
         _burn(msg.sender, pufETHAmount);
     }
+
+    //////////////////// NEWLY ADDED FUNCTIONALITY ///////////////////
+
+    // Maximum grant amount
+    uint256 public maxGrantAmount;
+    // Mapping that will holds if addresses can receive grants
+    mapping(address => bool) private recipients;
+
+    // Event emitted when the maxGrantAmount is updated
+    event MaxGrantAmountUpdated(uint256 indexed newAmount);
+    // Event emitted when the grant recipient is added
+    event AddRecipient(address indexed recipient);
+    // Event emitted when the grant recipient is removed
+    event RemoveRecipient(address indexed recipient);
+
+    /**
+     * @notice Updates the maximum grant amount.
+     * @param newMaxGrantAmount The new max grant amount to set.
+     * @dev Only callable by the admin.
+     */
+    function setMaxGrantAmount(uint256 newMaxGrantAmount) external restricted {
+        maxGrantAmount = newMaxGrantAmount;
+        emit MaxGrantAmountUpdated(maxGrantAmount);
+    }
+
+    /**
+     * @notice Returns if address can receive the grants
+     * @param  grantRecipient Address that needs to be checked
+     */
+    function _isRecipient(address grantRecipient) internal returns(bool){
+        return recipients[grantRecipient];
+    }
+
+    /**
+     * @notice Returns if address can receive the grants
+     * @param  grantRecipient Address that needs to be checked
+     * TODO: possible add specific role to fetch the private info,
+        maybe backend specific address that can fetch this
+     */
+    function isRecipient(address grantRecipient) public restricted returns(bool){
+        return _isRecipient(grantRecipient);
+    }
+
+    /**
+     * @notice Updates who can receive the grant
+     * @param  grantRecipient Address that will be eligible for the grant.
+     * @dev Only callable by the admin.
+     */
+    function addRecipient(address grantRecipient) external restricted {
+        require(grantRecipient != address(0x0), "Recipient is not valid address");
+        if (!_isRecipient(grantRecipient)) {
+            recipients[grantRecipient] = true;
+            emit AddRecipient(grantRecipient);
+        }
+    }
+
+    /**
+     * @notice Removing the recipient from grants
+     * @param  grantRecipient Address that will be eligible for the grant.
+     * @dev Only callable by the admin.
+     */
+    function removeRecipient(address grantRecipient) external restricted {
+        require(grantRecipient != address(0x0), "Recipient is not valid address");
+        if (_isRecipient(grantRecipient)) {
+            recipients[grantRecipient] = false;
+            emit RemoveRecipient(grantRecipient);
+        }
+    }
 }
