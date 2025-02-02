@@ -11,6 +11,8 @@ import { IWETH } from "./interface/Other/IWETH.sol";
 import { IPufferVaultV3 } from "./interface/IPufferVaultV3.sol";
 import { IPufferOracle } from "./interface/IPufferOracle.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+
 
 /**
  * @title PufferVaultV3
@@ -18,7 +20,7 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
  * @notice This contract extends the functionality of PufferVaultV2 with additional features for reward minting and bridging.
  * @custom:security-contact security@puffer.fi
  */
-contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3 {
+contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradeable {
     using Math for uint256;
 
     /**
@@ -42,6 +44,13 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3 {
         IDelegationManager delegationManager
     ) PufferVaultV2(stETH, weth, lidoWithdrawalQueue, stETHStrategy, eigenStrategyManager, oracle, delegationManager) {
         _disableInitializers();
+    }
+
+    /**
+     * @notice Function is initializing the state of the contract
+     */
+    function initialize() public {
+        __ReentrancyGuard_init();
     }
 
     /**
@@ -143,16 +152,6 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3 {
     event RemoveRecipient(address indexed recipient);
 
     /**
-     * @notice Updates the maximum grant amount.
-     * @param newMaxGrantAmount The new max grant amount to set.
-     * @dev Only callable by the admin.
-     */
-    function setMaxGrantAmount(uint256 newMaxGrantAmount) external restricted {
-        maxGrantAmount = newMaxGrantAmount;
-        emit MaxGrantAmountUpdated(maxGrantAmount);
-    }
-
-    /**
      * @notice Returns if address can receive the grants
      * @param  grantRecipient Address that needs to be checked
      */
@@ -168,6 +167,32 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3 {
      */
     function isRecipient(address grantRecipient) public restricted returns(bool){
         return _isRecipient(grantRecipient);
+    }
+
+    /**
+     * @notice Function to pay a grant to an eligible address
+     * @param  grantRecipient Address that needs to receive grant
+     * TODO: possible add specific role to fetch the private info,
+        maybe backend specific address that can fetch this
+     */
+    // Function to pay a grant to an eligible address
+    function payGrant(address grantRecipient, uint256 amount) external restricted nonReentrant {
+        require(grantEligibility[recipient], "Recipient is not eligible for a grant");
+        require(amount <= vaultBalance, "Not enough funds in the vault");
+
+        vaultBalance -= amount;
+        payable(recipient).transfer(amount);
+        emit GrantPaid(recipient, amount);
+    }
+
+    /**
+     * @notice Updates the maximum grant amount.
+     * @param newMaxGrantAmount The new max grant amount to set.
+     * @dev Only callable by the admin.
+     */
+    function setMaxGrantAmount(uint256 newMaxGrantAmount) external restricted {
+        maxGrantAmount = newMaxGrantAmount;
+        emit MaxGrantAmountUpdated(maxGrantAmount);
     }
 
     /**
