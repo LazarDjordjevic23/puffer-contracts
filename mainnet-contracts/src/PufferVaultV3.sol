@@ -46,12 +46,12 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
         _disableInitializers();
     }
 
-    /**
-     * @notice Function is initializing the state of the contract
-     */
-    function initialize() public {
-        __ReentrancyGuard_init();
-    }
+//    /**
+//     * @notice Function is initializing the state of the contract
+//     */
+//    function initialize() external initializer {
+//        __ReentrancyGuard_init();
+//    }
 
     /**
      * @notice Returns the total assets held by the vault.
@@ -141,8 +141,12 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
 
     // Maximum grant amount
     uint256 public maxGrantAmount;
+    // Array that holds all the recipients
+    address[] private recipients;
+    // Id of every recipient in the recipients array
+    mapping(address => uint256) public idOfRecipient;
     // Mapping that will holds if addresses can receive grants
-    mapping(address => bool) private recipients;
+    mapping(address => bool) private isRecipient;
 
     // Event emitted when the maxGrantAmount is updated
     event MaxGrantAmountUpdated(uint256 indexed newAmount);
@@ -154,36 +158,58 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
     /**
      * @notice Returns if address can receive the grants
      * @param  grantRecipient Address that needs to be checked
-     */
-    function _isRecipient(address grantRecipient) internal returns(bool){
-        return recipients[grantRecipient];
-    }
-
-    /**
-     * @notice Returns if address can receive the grants
-     * @param  grantRecipient Address that needs to be checked
      * TODO: possible add specific role to fetch the private info,
         maybe backend specific address that can fetch this
      */
-    function isRecipient(address grantRecipient) public restricted returns(bool){
-        return _isRecipient(grantRecipient);
+    function getIsRecipient(address grantRecipient) public restricted returns(bool){
+        return isRecipient[grantRecipient];
     }
 
     /**
-     * @notice Function to pay a grant to an eligible address
-     * @param  grantRecipient Address that needs to receive grant
+     * @notice Returns addresses that are recipients
+     * @param start - beginning index of array
+     * @param end - ending index of array
      * TODO: possible add specific role to fetch the private info,
         maybe backend specific address that can fetch this
      */
-    // Function to pay a grant to an eligible address
-    function payGrant(address grantRecipient, uint256 amount) external restricted nonReentrant {
-        require(grantEligibility[recipient], "Recipient is not eligible for a grant");
-        require(amount <= vaultBalance, "Not enough funds in the vault");
+    function getRecipients(uint256 start, uint256 end) public restricted returns(address[] memory){
+        uint256 nofRecipients = getNofRecipients();
+        address[] memory batchRecipients;
 
-        vaultBalance -= amount;
-        payable(recipient).transfer(amount);
-        emit GrantPaid(recipient, amount);
+        if (nofRecipients > 0){
+            require(start < end, "Start is bigger than end index");
+            require(end <= nofRecipients, "End index is bigger than actual array");
+
+            batchRecipients = new address[](end - start);
+
+            for (uint256 i = start; i < end; i++) {
+                batchRecipients[i - start] = recipients[i];
+            }
+        }
+
+        return batchRecipients;
     }
+
+    /**
+     * @notice Returns the number of recipients
+     */
+    function getNofRecipients() public returns(uint256){ return recipients.length; }
+
+//    /**
+//     * @notice Function to pay a grant to an eligible address
+//     * @param  grantRecipient Address that needs to receive grant
+//     * TODO: possible add specific role to fetch the private info,
+//        maybe backend specific address that can fetch this
+//     */
+//    // Function to pay a grant to an eligible address
+//    function payGrant(address grantRecipient, uint256 amount) external restricted nonReentrant {
+//        require(grantEligibility[recipient], "Recipient is not eligible for a grant");
+//        require(amount <= vaultBalance, "Not enough funds in the vault");
+//
+//        vaultBalance -= amount;
+//        payable(recipient).transfer(amount);
+//        emit GrantPaid(recipient, amount);
+//    }
 
     /**
      * @notice Updates the maximum grant amount.
@@ -202,8 +228,12 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
      */
     function addRecipient(address grantRecipient) external restricted {
         require(grantRecipient != address(0x0), "Recipient is not valid address");
-        if (!_isRecipient(grantRecipient)) {
-            recipients[grantRecipient] = true;
+        if (!isRecipient[grantRecipient]) {
+            // Add recipient to the system
+            idOfRecipient[grantRecipient] = getNofRecipients();
+            recipients.push(grantRecipient);
+            isRecipient[grantRecipient] = true;
+
             emit AddRecipient(grantRecipient);
         }
     }
@@ -215,9 +245,28 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
      */
     function removeRecipient(address grantRecipient) external restricted {
         require(grantRecipient != address(0x0), "Recipient is not valid address");
-        if (_isRecipient(grantRecipient)) {
-            recipients[grantRecipient] = false;
-            emit RemoveRecipient(grantRecipient);
+
+        uint256 nofRecipients = getNofRecipients();
+        if (nofRecipients > 0){
+            if (isRecipient[grantRecipient]) {
+
+                uint256 userIndex = idOfRecipient[grantRecipient];
+                uint256 lastIndex = nofRecipients - 1;
+
+                // Swap if not the last user
+                if (userIndex != lastIndex) {
+                    address lastUser = recipients[lastIndex];
+                    recipients[userIndex] = lastUser;
+                    idOfRecipient[lastUser] = userIndex;
+                }
+
+                // Remove the participant
+                recipients.pop();
+                delete idOfRecipient[grantRecipient];
+                isRecipient[grantRecipient] = false;
+
+                emit RemoveRecipient(grantRecipient);
+            }
         }
     }
 }
