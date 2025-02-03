@@ -24,6 +24,11 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
     using Math for uint256;
 
     /**
+     * @dev Storage gap to allow for future upgrades without storage collisions.
+     */
+    uint256[50] private __gap;
+
+    /**
      * @notice Initializes the PufferVaultV3 contract.
      * @param stETH Address of the stETH token contract.
      * @param weth Address of the WETH token contract.
@@ -44,6 +49,15 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
         IDelegationManager delegationManager
     ) PufferVaultV2(stETH, weth, lidoWithdrawalQueue, stETHStrategy, eigenStrategyManager, oracle, delegationManager) {
         _disableInitializers();
+    }
+
+    /**
+     * @notice Initializes the PufferVaultV3 contract.
+     * @dev This function should be called during the upgrade process.
+     * It reinitializes the contract and sets up any new state variables.
+     */
+    function initializeV3() external reinitializer(3) {
+        __ReentrancyGuard_init();
     }
 
 //    /**
@@ -154,6 +168,8 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
     event AddRecipient(address indexed recipient);
     // Event emitted when the grant recipient is removed
     event RemoveRecipient(address indexed recipient);
+    // Events for grants
+    event GrantPaid(address indexed recipient, uint256 indexed amount, bool indexed asWETH);
 
     /**
      * @notice Returns if address can receive the grants
@@ -195,21 +211,99 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
      */
     function getNofRecipients() public returns(uint256){ return recipients.length; }
 
-//    /**
-//     * @notice Function to pay a grant to an eligible address
-//     * @param  grantRecipient Address that needs to receive grant
-//     * TODO: possible add specific role to fetch the private info,
-//        maybe backend specific address that can fetch this
-//     */
-//    // Function to pay a grant to an eligible address
-//    function payGrant(address grantRecipient, uint256 amount) external restricted nonReentrant {
-//        require(grantEligibility[recipient], "Recipient is not eligible for a grant");
-//        require(amount <= vaultBalance, "Not enough funds in the vault");
+    function _hasSufficientFunds(uint256 amount, bool asWETH) internal view returns (bool) {
+        if (asWETH) {
+            // Check if there is enough WETH after accounting for reserved WETH
+            uint256 wethBalance = _WETH.balanceOf(address(this));
+            uint256 reservedWETH = _calculateReservedWETH();
+            return wethBalance >= (amount + reservedWETH);
+        } else {
+            // Check if there is enough ETH after accounting for reserved ETH
+            uint256 ethBalance = address(this).balance;
+            uint256 reservedETH = _calculateReservedETH();
+            return ethBalance >= (amount + reservedETH);
+        }
+    }
+
+//    function _calculateReservedFunds() internal view returns (uint256) {
+//        // 1. Pending Lido ETH Withdrawals
+//        uint256 pendingLidoETH = getPendingLidoETHAmount();
 //
-//        vaultBalance -= amount;
-//        payable(recipient).transfer(amount);
-//        emit GrantPaid(recipient, amount);
+//        // 2. EigenLayer Backing ETH
+//        uint256 eigenLayerBackingETH = getELBackingEthAmount();
+//
+//        // 3. Locked ETH in PufferOracle
+//        uint256 lockedEthInPufferOracle = PUFFER_ORACLE.getLockedEthAmount();
+//
+//        // 4. ETH and WETH Reserved for Withdrawals
+//        uint256 ethBalanceReservedForWithdrawals = address(this).balance;
+//        uint256 wethBalanceReservedForWithdrawals = _WETH.balanceOf(address(this));
+//
+//        // Total Reserved Funds
+//        uint256 totalReservedFunds = pendingLidoETH
+//        + eigenLayerBackingETH
+//        + lockedEthInPufferOracle
+//        + ethBalanceReservedForWithdrawals
+//        + wethBalanceReservedForWithdrawals;
+//
+//        return totalReservedFunds;
 //    }
+
+    function _calculateReservedWETH() internal view returns (uint256) {
+        // 1. WETH Reserved for Withdrawals
+        uint256 wethBalanceReservedForWithdrawals = _WETH.balanceOf(address(this));
+
+        // Total Reserved WETH
+        return wethBalanceReservedForWithdrawals;
+    }
+
+    function _calculateReservedETH() internal view returns (uint256) {
+        // 1. Pending Lido ETH Withdrawals
+        uint256 pendingLidoETH = getPendingLidoETHAmount();
+
+        // 2. EigenLayer Backing ETH
+        uint256 eigenLayerBackingETH = getELBackingEthAmount();
+
+        // 3. Locked ETH in PufferOracle
+        uint256 lockedEthInPufferOracle = PUFFER_ORACLE.getLockedEthAmount();
+
+        // 4. ETH Reserved for Withdrawals
+        uint256 ethBalanceReservedForWithdrawals = address(this).balance;
+
+        // Total Reserved ETH
+        uint256 totalReservedETH = pendingLidoETH
+        + eigenLayerBackingETH
+        + lockedEthInPufferOracle
+        + ethBalanceReservedForWithdrawals;
+
+        return totalReservedETH;
+    }
+
+    /**
+     * @notice Function is Paying out the grants
+     * @param
+     * @param
+     */
+    function payGrant(
+        address grantRecipient,
+        uint256 amount,
+        bool asWETH
+    ) external restricted nonReentrant {
+        require(amount > 0 && amount <= maxGrantAmount, "Invalid grant amount");
+        require(isRecipient[grantRecipient], "Recipient not allowed");
+        require(_hasSufficientFunds(amount), "Insufficient funds for grant");
+
+        if (asWETH) {
+            // Transfer WETH
+            require(_WETH.transfer(recipient, amount), "WETH transfer failed");
+        } else {
+            // Transfer ETH
+            (bool success, ) = recipient.call{value: amount}("");
+            require(success, "ETH transfer failed");
+        }
+
+        emit GrantPaid(recipient, amount, asWETH);
+    }
 
     /**
      * @notice Updates the maximum grant amount.
