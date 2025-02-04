@@ -23,10 +23,41 @@ import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/
 contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradeable {
     using Math for uint256;
 
+    /////////////////////////////// NEWLY ADDED PARAMS ///////////////////////////////
+
     /**
      * @dev Storage gap to allow for future upgrades without storage collisions.
      */
     uint256[50] private __gap;
+
+    // Flag to track initialization
+    bool private _initializedV3;
+
+    // Maximum grant amount
+    uint256 public maxGrantAmount;
+    // Array that holds all the recipients
+    address[] private recipients;
+    // Id of every recipient in the recipients array
+    mapping(address => uint256) public idOfRecipient;
+    // Mapping that will holds if addresses can receive grants
+    mapping(address => bool) private isRecipient;
+
+    // Event emitted when the maxGrantAmount is updated
+    event MaxGrantAmountUpdated(uint256 indexed newAmount);
+    // Event emitted when the grant recipient is added
+    event AddRecipient(address indexed recipient);
+    // Event emitted when the grant recipient is removed
+    event RemoveRecipient(address indexed recipient);
+    // Events for paid grants
+    event GrantPaid(address indexed recipient, uint256 indexed amount, bool indexed asWETH);
+
+    // Modifier to ensure the initialize is only called once
+    modifier onlyOnce() {
+        require(!_initializedV3, "PufferVaultV3: already initialized");
+        _;
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////////
 
     /**
      * @notice Initializes the PufferVaultV3 contract.
@@ -51,21 +82,29 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
         _disableInitializers();
     }
 
+
+    /////////////////////////////// NEWLY ADDED INITIALIZER ///////////////////////////////
+
     /**
      * @notice Initializes the PufferVaultV3 contract.
      * @dev This function should be called during the upgrade process.
-     * It reinitializes the contract and sets up any new state variables.
      */
-    function initializeV3() external reinitializer(3) {
+    function initializeV3() external reinitializer(3) onlyOnce {
+        // Prevent calling initializeV3 more than once
+        _initializedV3 = true;
+        // Initialize inherited contracts and state variables
         __ReentrancyGuard_init();
     }
 
-//    /**
-//     * @notice Function is initializing the state of the contract
-//     */
-//    function initialize() external initializer {
-//        __ReentrancyGuard_init();
-//    }
+    /**
+     * @dev Authorizes an upgrade to a new implementation
+     * Restricted access
+     * @param newImplementation The address of the new implementation
+     */
+    // slither-disable-next-line dead-code
+    function _authorizeUpgrade(address newImplementation) internal virtual override restricted { }
+
+    //////////////////////////////////////////////////////////////////////////////////////
 
     /**
      * @notice Returns the total assets held by the vault.
@@ -151,30 +190,15 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
         _burn(msg.sender, pufETHAmount);
     }
 
-    //////////////////// NEWLY ADDED FUNCTIONALITY ///////////////////
+    /////////////////////////////// NEWLY ADDED GRANT SYSTEM ///////////////////////////////
 
-    // Maximum grant amount
-    uint256 public maxGrantAmount;
-    // Array that holds all the recipients
-    address[] private recipients;
-    // Id of every recipient in the recipients array
-    mapping(address => uint256) public idOfRecipient;
-    // Mapping that will holds if addresses can receive grants
-    mapping(address => bool) private isRecipient;
-
-    // Event emitted when the maxGrantAmount is updated
-    event MaxGrantAmountUpdated(uint256 indexed newAmount);
-    // Event emitted when the grant recipient is added
-    event AddRecipient(address indexed recipient);
-    // Event emitted when the grant recipient is removed
-    event RemoveRecipient(address indexed recipient);
-    // Events for grants
-    event GrantPaid(address indexed recipient, uint256 indexed amount, bool indexed asWETH);
+    //////////////////// GETTERS /////////////////////
 
     /**
      * @notice Returns if address can receive the grants
      * @param  grantRecipient Address that needs to be checked
-     * TODO: possible add specific role to fetch the private info,
+     * @return bool Returns true if the address is eligible for grant
+     * TODO: possibly add specific role to fetch the private info,
         maybe backend specific address that can fetch this
      */
     function getIsRecipient(address grantRecipient) public restricted returns(bool){
@@ -183,9 +207,10 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
 
     /**
      * @notice Returns addresses that are recipients
-     * @param start - beginning index of array
-     * @param end - ending index of array
-     * TODO: possible add specific role to fetch the private info,
+     * @param start - first index of sliced array
+     * @param end - last index of sliced array
+     * @return address[] sliced array of recipients
+     * TODO: possibly add specific role to fetch the private info,
         maybe backend specific address that can fetch this
      */
     function getRecipients(uint256 start, uint256 end) public restricted returns(address[] memory){
@@ -208,102 +233,90 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
 
     /**
      * @notice Returns the number of recipients
+     * @return uint256 Returns number of participants
      */
     function getNofRecipients() public returns(uint256){ return recipients.length; }
 
-    function _hasSufficientFunds(uint256 amount, bool asWETH) internal view returns (bool) {
-        if (asWETH) {
-            // Check if there is enough WETH after accounting for reserved WETH
-            uint256 wethBalance = _WETH.balanceOf(address(this));
-            uint256 reservedWETH = _calculateReservedWETH();
-            return wethBalance >= (amount + reservedWETH);
-        } else {
-            // Check if there is enough ETH after accounting for reserved ETH
-            uint256 ethBalance = address(this).balance;
-            uint256 reservedETH = _calculateReservedETH();
-            return ethBalance >= (amount + reservedETH);
-        }
-    }
+    //////////////////// GRANT SYSTEM /////////////////////
 
-//    function _calculateReservedFunds() internal view returns (uint256) {
-//        // 1. Pending Lido ETH Withdrawals
-//        uint256 pendingLidoETH = getPendingLidoETHAmount();
-//
-//        // 2. EigenLayer Backing ETH
-//        uint256 eigenLayerBackingETH = getELBackingEthAmount();
-//
-//        // 3. Locked ETH in PufferOracle
-//        uint256 lockedEthInPufferOracle = PUFFER_ORACLE.getLockedEthAmount();
-//
-//        // 4. ETH and WETH Reserved for Withdrawals
-//        uint256 ethBalanceReservedForWithdrawals = address(this).balance;
-//        uint256 wethBalanceReservedForWithdrawals = _WETH.balanceOf(address(this));
-//
-//        // Total Reserved Funds
-//        uint256 totalReservedFunds = pendingLidoETH
-//        + eigenLayerBackingETH
-//        + lockedEthInPufferOracle
-//        + ethBalanceReservedForWithdrawals
-//        + wethBalanceReservedForWithdrawals;
-//
-//        return totalReservedFunds;
-//    }
+    /**
+     * @notice Checks if the contract has sufficient available funds (ETH + WETH) to cover a given amount.
+     * @dev This function calculates the total ETH-like balance (ETH + WETH), subtracts reserved ETH,
+     * and determines if enough funds are available.
+     * @param amount The required amount to check against the available balance.
+     * @return bool Returns true if the contract has enough unreserved ETH/WETH,
+     * to cover the requested amount, otherwise false.
+     */
+    function _hasSufficientFunds(uint256 amount) internal view returns(bool){
+        // Calculate total available ETH-like value (ETH + WETH)
+        uint256 totalAvailableBalance = address(this).balance + _WETH.balanceOf(address(this));
+        // Get the amount of ETH that is reserved and cannot be spent
+        uint256 reservedBalance = getELBackingEthAmount() + getPendingLidoETHAmount();
 
-    function _calculateReservedWETH() internal view returns (uint256) {
-        // 1. WETH Reserved for Withdrawals
-        uint256 wethBalanceReservedForWithdrawals = _WETH.balanceOf(address(this));
-
-        // Total Reserved WETH
-        return wethBalanceReservedForWithdrawals;
-    }
-
-    function _calculateReservedETH() internal view returns (uint256) {
-        // 1. Pending Lido ETH Withdrawals
-        uint256 pendingLidoETH = getPendingLidoETHAmount();
-
-        // 2. EigenLayer Backing ETH
-        uint256 eigenLayerBackingETH = getELBackingEthAmount();
-
-        // 3. Locked ETH in PufferOracle
-        uint256 lockedEthInPufferOracle = PUFFER_ORACLE.getLockedEthAmount();
-
-        // 4. ETH Reserved for Withdrawals
-        uint256 ethBalanceReservedForWithdrawals = address(this).balance;
-
-        // Total Reserved ETH
-        uint256 totalReservedETH = pendingLidoETH
-        + eigenLayerBackingETH
-        + lockedEthInPufferOracle
-        + ethBalanceReservedForWithdrawals;
-
-        return totalReservedETH;
+        if (reservedBalance >= totalAvailableBalance) { return false;}
+        return (totalAvailableBalance - reservedBalance) >= amount;
     }
 
     /**
-     * @notice Function is Paying out the grants
-     * @param
-     * @param
+     * @notice Unwraps WETH to ETH.
+     * @dev Converts WETH into ETH when needed.
+     */
+    function _unwrapETH(uint256 assets) internal virtual {
+        uint256 ethBalance = address(this).balance;
+
+        if (ethBalance < assets) {
+            uint256 wethNeeded = assets - ethBalance;
+            uint256 wethBalance = _WETH.balanceOf(address(this));
+
+            if (wethBalance >= wethNeeded) {
+                _WETH.withdraw(wethNeeded);
+            }
+        }
+    }
+
+    /**
+     * @notice Pays out grants to eligible recipients in either ETH or WETH.
+     * @param grantRecipient The address receiving the grant.
+     * @param amount The amount to be paid.
+     * @param asWETH Whether the grant should be paid in WETH.
+     * @dev Ensures the contract has sufficient funds and converts between ETH/WETH if needed.
      */
     function payGrant(
         address grantRecipient,
         uint256 amount,
         bool asWETH
-    ) external restricted nonReentrant {
+    ) external payable restricted nonReentrant {
         require(amount > 0 && amount <= maxGrantAmount, "Invalid grant amount");
         require(isRecipient[grantRecipient], "Recipient not allowed");
-        require(_hasSufficientFunds(amount), "Insufficient funds for grant");
+        require(_hasSufficientFunds(amount), "Not enough ETH to pay out the grant");
 
         if (asWETH) {
-            // Transfer WETH
-            require(_WETH.transfer(recipient, amount), "WETH transfer failed");
+            uint256 wethBalance = _WETH.balanceOf(address(this));
+
+            // Convert ETH to WETH if needed
+            if (amount > wethBalance) {
+                _wrapETH(amount - wethBalance);
+            }
+
+            require(_WETH.transfer(grantRecipient, amount), "WETH transfer failed");
+
         } else {
+            uint256 ethBalance = address(this).balance;
+
+            // Convert WETH to ETH if needed
+            if (amount > ethBalance) {
+                _unwrapETH(amount - ethBalance);
+            }
+
             // Transfer ETH
-            (bool success, ) = recipient.call{value: amount}("");
+            (bool success, ) = grantRecipient.call{value: amount}("");
             require(success, "ETH transfer failed");
         }
 
-        emit GrantPaid(recipient, amount, asWETH);
+        emit GrantPaid(grantRecipient, amount, asWETH);
     }
+
+    //////////////////// SETTERS /////////////////////
 
     /**
      * @notice Updates the maximum grant amount.
@@ -363,4 +376,8 @@ contract PufferVaultV3 is PufferVaultV2, IPufferVaultV3, ReentrancyGuardUpgradea
             }
         }
     }
+
+    receive() external payable virtual override {}
+
+    //////////////////////////////////////////////////////////////////////////////////////
 }
