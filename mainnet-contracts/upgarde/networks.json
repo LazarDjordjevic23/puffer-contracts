@@ -1,0 +1,11 @@
+{
+  "eth-test": {
+    "url": "https://ethereum-sepolia-rpc.publicnode.com"
+  },
+  "eth-Staging": {
+    "url": ""
+  },
+  "eth-mainnet": {
+    "url": ""
+  }
+}

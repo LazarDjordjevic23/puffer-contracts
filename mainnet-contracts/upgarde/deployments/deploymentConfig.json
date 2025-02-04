@@ -1,0 +1,5 @@
+{
+  "develop": {},
+  "staging": {},
+  "prod": {"specific_recipients": ["0x1", "0x2", "0x3"]}
+}
