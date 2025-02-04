@@ -1,78 +1,111 @@
-# <h1 align="center">Puffer Contracts</h1>
-[![Website][Website-badge]][Website] [![Docs][docs-badge]][docs]
-  [![Discord][discord-badge]][discord] [![X][X-badge]][X] [![Foundry][foundry-badge]][foundry]
-
-[Website-badge]: https://img.shields.io/badge/WEBSITE-8A2BE2
-[Website]: https://www.puffer.fi
-[X-badge]: https://img.shields.io/twitter/follow/puffer_finance
-[X]: https://twitter.com/puffer_finance
-[discord]: https://discord.gg/pufferfi
-[docs-badge]: https://img.shields.io/badge/DOCS-8A2BE2
-[docs]: https://docs.puffer.fi/
-[discord-badge]: https://dcbadge.vercel.app/api/server/pufferfi?style=flat
-[gha]: https://github.com/PufferFinance/PufferPool/actions
-[gha-badge]: https://github.com/PufferFinance/PufferPool/actions/workflows/ci.yml/badge.svg
-[foundry]: https://getfoundry.sh
-[foundry-badge]: https://img.shields.io/badge/Built%20with-Foundry-FFDB1C.svg
+# PufferVaultV3 Contract
 
 ## Overview
-Stakers can deposit ETH and mint the [pufETH nLRT](https://docs.puffer.fi/protocol/nlrt#pufeth) via the PufferVault contract, which serves as a redeemable receipt for their restaked ETH. If sufficient exit liquidity is available, stakers can reclaim their ETH from the PufferVault. Over time, the redeemable amount is expected to increase from [validator tickets](https://docs.puffer.fi/protocol/validator-tickets) and restaking rewards.
 
-In [contrast with conventional liquid staking tokens (LSTs)](https://docs.puffer.fi/protocol/nlrt#what-is-an-lst), pufETH can provide strictly more rewards for its holders. Not only does pufETH encompass PoS rewards and restaking rewards, but its value can accelerate quickly due to validator ticket sales. Furthermore, the PoS rewards for stakers are decoupled from the protocol validators' performance.
+The `PufferVaultV3` contract is an upgrade to the `PufferVaultV2` contract, adding new functionality related to grant management, reward minting, and additional improvements. This contract extends the PufferVaultV2 system with the ability to manage grant recipients and handle grant payments in both ETH and WETH. The system ensures that only eligible recipients can receive grants, and it is equipped with proper access controls, sufficient fund checks, and non-reentrancy protection.
 
-## pufETH
+## Features
 
-pufETH is implemented as a reward-bearing ERC20 token, following [ERC4626](https://ethereum.org/en/developers/docs/standards/tokens/erc-4626/) standard and inspired by [Compound's cToken](https://docs.compound.finance/v2/ctokens/#ctokens) design for optimal DeFi compatibility. It represents a novel approach in the liquid staking domain, introducing several features that enhance stakers' rewards and interaction with DeFi protocols.
+### 1. Grant Management
+- **Grant recipients:** The contract allows for the addition and removal of eligible grant recipients.
+- **Grant payments:** Grants can be paid in ETH or WETH to eligible recipients, subject to a maximum grant amount.
+- **Grant validation:** The contract checks if recipients are eligible and ensures sufficient funds are available before making a payment.
 
-Read more about pufETH and native Liquid Restaking Tokens (nLRTs) in the [Puffer Docs](https://docs.puffer.fi/protocol/nlrt#pufeth) website.
+### 2. Reward Minting and Bridging
+- **Minting rewards:** The contract allows for the minting of `pufETH` rewards based on certain criteria.
+- **Reward deposits:** Rewards can be deposited into the vault, contributing to the total assets.
 
+### 3. Security
+- **Non-reentrancy:** The contract is protected by the `ReentrancyGuardUpgradeable` to prevent reentrancy attacks.
+- **Sufficient funds check:** Ensures the contract has enough ETH or WETH to process grants before making any payouts.
+- **Initializable contract:** Ensures that the contract can only be initialized once during the upgrade process.
 
-## How pufETH Works
-Stakers deposit ETH to the PufferVault contract to mint the pufETH nLRT. At the protocol's inception, pufETH's conversion rate is one-to-one, but is expected to increase over time. Assuming the protocol performs well, i.e., accrues more rewards than penalties, the amount of ETH redeemable for pufETH will increase.
+## Contract Components
 
-### Calculating the Conversion Rate
-The conversion rate can be calculated simply as:
+### 1. Constructor & Initialization
+- The constructor initializes the contract with addresses for various tokens, strategies, and managers.
+- `initializeV3`: A special function that can only be called once during the upgrade process to initialize state variables and ensure proper contract setup.
 
-```
-conversion rate = (deposits + rewards - penalties) / pufETH supply
-```
+### 2. Grant System
+- **Grant Payments:**
+  - `payGrant`: Allows the payment of grants to recipients in either ETH or WETH.
+  - Validates the recipient, checks if the contract has sufficient funds, and ensures that the grant amount does not exceed the maximum allowed.
   
-Where:
+- **Grant Recipients Management:**
+  - `addRecipient`: Adds a new recipient to the list of eligible recipients.
+  - `removeRecipient`: Removes a recipient from the list of eligible recipients.
+  
+- **Grant Amount Configuration:**
+  - `setMaxGrantAmount`: Sets the maximum allowed grant amount.
+  - `getIsRecipient`: Checks if an address is eligible to receive grants.
+  - `getRecipients`: Retrieves a list of eligible grant recipients in a specified range.
+  
+### 3. Security Features
+- **Non-reentrancy:** Uses `nonReentrant` modifier to prevent reentrancy attacks during the grant payment process.
+- **Sufficient Funds Check:** The contract checks if enough ETH/WETH is available to cover the grant payments, considering reserved funds.
+- **Wrap/Unwrap WETH:** Internal functions to convert WETH to ETH and vice versa as needed when making grant payments.
 
-- deposits and pufETH supply increase proportionally as stakers deposit ETH to mint pufETH, leaving the conversion rate unaffected.
+## Events
+The following events are emitted to track important changes:
+- `MaxGrantAmountUpdated`: Emitted when the maximum grant amount is updated.
+- `AddRecipient`: Emitted when a new recipient is added.
+- `RemoveRecipient`: Emitted when a recipient is removed.
+- `GrantPaid`: Emitted when a grant is successfully paid to a recipient.
 
-- rewards increase as [restaking operators](https://docs.puffer.fi/protocol/puffer-modules#restaking-operators) run AVSs and whenever validator tickets are minted.
+## Functions
 
-- penalties accrue if validators are slashed on PoS for more than their 2 ETH collateral, which is [disincentivized behavior](https://docs.puffer.fi/protocol/validator-tickets#why--noop-incentives) and mitigated through [anti-slashing technology](https://docs.puffer.fi/technology/secure-signer). Penalties can also accrue if the restaking operator is slashed running AVSs, which is why Puffer is [restricting restaking operator participation](https://docs.puffer.fi/protocol/puffer-modules#restricting-reops) during its nascent stages.
+### 1. Grant System
 
+#### `payGrant(address grantRecipient, uint256 amount, bool asWETH)`
+- Pays a grant to a recipient in either ETH or WETH.
+- Ensures the recipient is eligible and the contract has sufficient funds.
 
-## Contract addresses
-- PufferVault (pufETH token): `0xD9A442856C234a39a81a089C06451EBAa4306a72`
+#### `addRecipient(address grantRecipient)`
+- Adds a recipient to the grant system.
+- Only callable by the admin.
 
-For more detailed information on the contract deployments (Mainnet, Holesky, etc) and the ABIs, please check the [Deployments and ACL](https://github.com/PufferFinance/Deployments-and-ACL/blob/main/docs/deployments/) repository.
+#### `removeRecipient(address grantRecipient)`
+- Removes a recipient from the grant system.
+- Only callable by the admin.
 
+#### `setMaxGrantAmount(uint256 newMaxGrantAmount)`
+- Updates the maximum allowed grant amount.
+- Only callable by the admin.
 
-## Audits
-- BlockSec: 
-  - [pufETH V1](./audits/BlockSec-pufETH-v1.pdf)
-  - [pufETH V2 & PufferProtocol](./audits/BlockSec%20-%20pufETHV2%20&%20PufferProtocol.pdf)
-  - [Puffer L2 Staking](./audits/Blocksec%20-%20Puffer%20L2%20Staking.pdf)
-  - [Fast Path Rewards](./audits/BlockSec%20-%20Fast%20Path%20Rewards.pdf)
-  - [2 Step Withdrawals](./audits/BlockSec%20-%202-Step%20Withdrawals.pdf)
-  - [PUFFER](./audits/BlockSec%20-%20PUFFER.pdf)
-  - [ValidatorTicket upgrade & PufferRevenueDepositor](./audits/BlockSec%20-%20VT%20upgrade%20&%20PufferRevenueDepositor.pdf)
-- SlowMist: 
-  - [pufETH V1](./audits/SlowMist-pufETH-v1.pdf)
-  - [pufETH V2 & PufferProtocol](./audits/SlowMist%20-%20pufETHV2%20&%20PufferProtocol.pdf)
-  - [Puffer L2 Staking](./audits/SlowMist%20-%20Puffer%20L2%20Staking.pdf)
-- Nethermind: [pufETH V2 & PufferProtocol](https://github.com/NethermindEth/PublicAuditReports/blob/main/NM0202-FINAL_PUFFER.pdf)
-- Creed: [pufETH V2 & PufferProtocol](https://github.com/PufferFinance/PufferPool/blob/polish-docs/docs/audits/Creed_Puffer_Finance_Audit_April2024.pdf)
-- Quantstamp: [pufETH V1](./audits/Quantstamp-pufETH-v1.pdf)
-- Trail of Bits: [pufETH V2](https://github.com/trailofbits/publications/blob/master/reviews/2024-03-pufferfinance-securityreview.pdf)
-- Immunefi [Boost](https://immunefi.com/boost/pufferfinance-boost/): [v1](./audits/Immunefi_Boost_pufETH_v1.pdf)
+### 2. Utility Functions
 
-# How to run unit tests
+#### `getIsRecipient(address grantRecipient)`
+- Checks if an address is eligible to receive grants.
 
-1. Clone this repository
-2. `yarn install`
-3. `cd mainnet-contracts/ && yarn test:unit` or `cd l2-contracts/ yarn test:unit`
+#### `getRecipients(uint256 start, uint256 end)`
+- Retrieves a list of eligible recipients in the specified range.
+
+#### `getNofRecipients()`
+- Returns the total number of eligible grant recipients.
+
+### 3. Internal Functions
+
+#### `_hasSufficientFunds(uint256 amount)`
+- Checks if the contract has enough ETH/WETH available to cover the requested grant amount.
+
+#### `_unwrapETH(uint256 assets)`
+- Converts WETH to ETH if needed.
+
+#### `_wrapETH(uint256 amount)`
+- Converts ETH to WETH if needed.
+
+## Security Considerations
+
+- The contract uses `ReentrancyGuardUpgradeable` to prevent reentrancy attacks.
+- The `restricted` modifier ensures that only authorized addresses (e.g., admins) can perform certain actions, such as adding/removing recipients and updating the maximum grant amount.
+- Proper checks are in place to ensure that the contract has sufficient funds for any transactions, and reverts if there are insufficient balances.
+
+## Upgrade Process
+
+- **Initialization:** The contract requires an initialization step (`initializeV3`) when upgrading from `PufferVaultV2` to `PufferVaultV3`. This step ensures that the contract's state variables and security mechanisms are properly initialized.
+- **Upgrade Authorization:** The upgrade process is authorized through the `_authorizeUpgrade` function, which is restricted and can only be executed by authorized entities.
+
+## License
+
+This contract is licensed under the GPL-3.0 License.
+
