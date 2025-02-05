@@ -1,3 +1,8 @@
+**I received this task at a really inconvenient time, and I sincerely apologize for the delay. Due to a series of unfortunate events combined with work commitments, I wasn’t able to double-check the implementation and scripts thoroughly. Please keep that in mind. I’m happy to elaborate further during the review meeting if needed. Everything is explained in detail in this README file, covering my implementation and the upgrade scripts.
+
+Thank you for the opportunity!**
+
+
 # PufferVaultV3 Contract
 
 ## Overview
