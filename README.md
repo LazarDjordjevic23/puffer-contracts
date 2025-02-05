@@ -122,10 +122,10 @@ This script automates the upgrade process for the **PufferVaultV3** contract loc
 2. **Yarn** is optional, but it is recommended for managing dependencies.
 
 If Yarn is not installed, you can install it globally using the following command:
-npm install -g yarn
+`npm install -g yarn`
 
 Install project dependencies using Yarn:
-yarn install
+`yarn install`
 
 Alternatively, use npm:
 npm install
@@ -134,12 +134,12 @@ npm install
 
 1. Fetch the Network Name
 The upgrade script requires the network name as a command-line argument. 
-For example, use "mainnet" for Ethereum Mainnet or any testnet (ropsten, rinkeby, etc.)
+For example, use "eth-mainnet" for Ethereum Mainnet or any testnet (sepolia, etc.)
 
 To run the upgrade script, use the following command:
-node mainnet-contracts/upgrade/upgradePufferVaultV3.js mainnet
+`node mainnet-contracts/upgrade/upgradePufferVaultV3.js eth-mainnet`
 
-In this example, `mainnet` is the network name passed as an argument.
+In this example, `eth-mainnet` is the network name passed as an argument.
 
 2. Script Overview
 
@@ -154,7 +154,7 @@ The upgrade script located at `mainnet-contracts/upgrade/upgradePufferVaultV3.js
 To run the upgrade script, execute the following command, providing the network name as an argument:
 
 Run the script with `mainnet` as the network name:
-node mainnet-contracts/upgrade/upgradePufferVaultV3.js mainnet
+`node mainnet-contracts/upgrade/upgradePufferVaultV3.js mainnet`
 
 This command will:
 1. Deploy the new `PufferVaultV3` implementation contract.
