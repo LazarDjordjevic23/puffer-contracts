@@ -110,76 +110,78 @@ The following events are emitted to track important changes:
 This contract is licensed under the GPL-3.0 License.
 
 
+
+
 # PufferVaultV3 Upgrade Process
 
-# This script automates the upgrade process for the **PufferVaultV3** contract located in the `mainnet-contracts/upgrade/` directory.
+This script automates the upgrade process for the **PufferVaultV3** contract located in the `mainnet-contracts/upgrade/` directory.
 
-# Prerequisites
+**Prerequisites**
 
-# 1. Make sure you have **Node.js** installed (preferably version 14 or higher).
-# 2. **Yarn** is optional, but it is recommended for managing dependencies.
+1. Make sure you have **Node.js** installed (preferably version 14 or higher).
+2. **Yarn** is optional, but it is recommended for managing dependencies.
 
-# If Yarn is not installed, you can install it globally using the following command:
+If Yarn is not installed, you can install it globally using the following command:
 npm install -g yarn
 
-# Install project dependencies using Yarn:
+Install project dependencies using Yarn:
 yarn install
 
-# Alternatively, use npm:
-# npm install
+Alternatively, use npm:
+npm install
 
-# Upgrade Process
+**Upgrade Process**
 
-# 1. Fetch the Network Name
-# The upgrade script requires the network name as a command-line argument. 
-# For example, use "mainnet" for Ethereum Mainnet or any testnet (ropsten, rinkeby, etc.)
+1. Fetch the Network Name
+The upgrade script requires the network name as a command-line argument. 
+For example, use "mainnet" for Ethereum Mainnet or any testnet (ropsten, rinkeby, etc.)
 
-# To run the upgrade script, use the following command:
-# node mainnet-contracts/upgrade/upgradePufferVaultV3.js mainnet
-
-# In this example, `mainnet` is the network name passed as an argument.
-
-# 2. Script Overview
-
-# The upgrade script located at `mainnet-contracts/upgrade/upgradePufferVaultV3.js` performs the following:
-
-# - Fetches the network configuration using the `fetchConfig` function.
-# - Deploys the new implementation of the `PufferVaultV3` contract using `deployAndSaveImplementation`.
-# - Deploys the proxy contract using `deployAndSaveProxy` and links it to the new implementation.
-# - Initializes the contract and sets parameters (such as `setMaxGrantAmount`) and adds recipients from `globalSettings`.
-
-# 3. Running the Upgrade Script
-# To run the upgrade script, execute the following command, providing the network name as an argument:
-
-# Run the script with `mainnet` as the network name:
+To run the upgrade script, use the following command:
 node mainnet-contracts/upgrade/upgradePufferVaultV3.js mainnet
 
-# This command will:
-# 1. Deploy the new `PufferVaultV3` implementation contract.
-# 2. Deploy the proxy contract and link it to the new implementation.
-# 3. Initialize the contract and set the `setMaxGrantAmount` parameter.
-# 4. Add the recipients from `globalSettings`.
+In this example, `mainnet` is the network name passed as an argument.
 
-# 4. Troubleshooting
+2. Script Overview
 
-# If you encounter any issues, make sure to check the following:
+The upgrade script located at `mainnet-contracts/upgrade/upgradePufferVaultV3.js` performs the following:
 
-# - Ensure you provide the correct network name as an argument.
-#   Example: `node mainnet-contracts/upgrade/upgradePufferVaultV3.js mainnet`
-# - Check that the `globalSettings` configuration is correctly set.
-# - Ensure the wallet you're using has sufficient funds to execute transactions.
-#   Example command to check wallet balance:
-#   etherscan-cli balance --address YOUR_WALLET_ADDRESS
+- Fetches the network configuration using the `fetchConfig` function.
+- Deploys the new implementation of the `PufferVaultV3` contract using `deployAndSaveImplementation`.
+- Deploys the proxy contract using `deployAndSaveProxy` and links it to the new implementation.
+- Initializes the contract and sets parameters (such as `setMaxGrantAmount`) and adds recipients from `globalSettings`.
 
-# 5. Important Notes
+3. Running the Upgrade Script
+To run the upgrade script, execute the following command, providing the network name as an argument:
 
-# - Make sure the `globalSettings` configuration file is properly set before running the upgrade script.
-# - Ensure that your deployment wallet has sufficient ETH to cover gas fees.
-# - If deploying to a test network (like Rinkeby or Ropsten), you may need to obtain test ETH from a faucet.
-# - The upgrade script uses `ethers.js` to interact with the Ethereum network. Ensure your `RPC` URL is properly set in your environment variables.
+Run the script with `mainnet` as the network name:
+node mainnet-contracts/upgrade/upgradePufferVaultV3.js mainnet
 
-# Conclusion
+This command will:
+1. Deploy the new `PufferVaultV3` implementation contract.
+2. Deploy the proxy contract and link it to the new implementation.
+3. Initialize the contract and set the `setMaxGrantAmount` parameter.
+4. Add the recipients from `globalSettings`.
 
-# Once the script completes, the **PufferVaultV3** contract will be upgraded on the specified network. Verify everything is correct and test thoroughly before considering the deployment to production.
+4. Troubleshooting
+
+If you encounter any issues, make sure to check the following:
+
+- Ensure you provide the correct network name as an argument.
+  Example: `node mainnet-contracts/upgrade/upgradePufferVaultV3.js mainnet`
+- Check that the `globalSettings` configuration is correctly set.
+- Ensure the wallet you're using has sufficient funds to execute transactions.
+  Example command to check wallet balance:
+  etherscan-cli balance --address YOUR_WALLET_ADDRESS
+
+5. Important Notes
+
+- Make sure the `globalSettings` configuration file is properly set before running the upgrade script.
+- Ensure that your deployment wallet has sufficient ETH to cover gas fees.
+- If deploying to a test network (like Rinkeby or Ropsten), you may need to obtain test ETH from a faucet.
+- The upgrade script uses `ethers.js` to interact with the Ethereum network. Ensure your `RPC` URL is properly set in your environment variables.
+
+**Conclusion**
+
+Once the script completes, the **PufferVaultV3** contract will be upgraded on the specified network. Verify everything is correct and test thoroughly before considering the deployment to production.
 
 
